@@ -6,6 +6,6 @@
 	<classpathentry kind="lib" path="C:/Users/Enridestroy/Downloads/hadoop-2.6.0/share/hadoop/mapreduce/hadoop-mapreduce-client-common-2.6.0.jar"/>
 	<classpathentry kind="lib" path="C:/Users/Enridestroy/Downloads/hadoop-2.6.0/share/hadoop/mapreduce/hadoop-mapreduce-client-core-2.6.0.jar"/>
 	<classpathentry kind="lib" path="C:/Users/Enridestroy/Downloads/hadoop-2.6.0/share/hadoop/mapreduce/hadoop-mapreduce-client-app-2.6.0.jar"/>
-	<classpathentry kind="lib" path="C:/Users/Enridestroy/Documents/NetBeansProjects/Acueducto_RDF4Data/lib/quick-json-1.0.4.jar"/>
+	<classpathentry exported="true" kind="lib" path="C:/Users/Enridestroy/workspace/FirstMapReduce/lib/quick-json-1.0.4.jar"/>
 	<classpathentry kind="output" path="bin"/>
 </classpath>
