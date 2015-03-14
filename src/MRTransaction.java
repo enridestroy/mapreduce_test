@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 
+import org.apache.hadoop.io.ArrayWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.Writable;
 
@@ -63,16 +64,30 @@ public class MRTransaction implements Writable{
 		return false;
 	}
 	
+	/**
+	 * 
+	 */
 	@Override
 	public void readFields(DataInput arg0) throws IOException {
-		// TODO Auto-generated method stub
-		
+		ArrayWritable tt = new ArrayWritable(Text.class);
+		tt.readFields(arg0);
+		for(Text t : (Text[])tt.toArray()){
+			this.items.add(t.toString());
+		}
 	}
 
+	/**
+	 * 
+	 */
 	@Override
 	public void write(DataOutput arg0) throws IOException {
-		// TODO Auto-generated method stub
-		
+		ArrayWritable tt = new ArrayWritable(Text.class);
+		String[] ss = this.items.toArray(new String[this.items.size()]);
+		Text[] casted = new Text[ss.length];
+		for(int i=0;i<ss.length;i++){
+			casted[i] = new Text(ss[i]);
+		}
+		tt.write(arg0);
 	}
 
 }

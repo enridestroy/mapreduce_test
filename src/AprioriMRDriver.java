@@ -4,7 +4,9 @@ import java.util.List;
 
 import org.apache.hadoop.conf.Configured;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.io.ArrayWritable;
 import org.apache.hadoop.io.IntWritable;
+import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapreduce.Job;
@@ -59,6 +61,9 @@ import org.apache.hadoop.util.ToolRunner;
  * 
  * on charge les nouveaux itemsets  et quoi ...
  * 
+ * TODO :
+ * ajouter les nouveaux jobs dans le jobcontroller
+ * indiquer les noms des fichiers  a charger...
  */
 public class AprioriMRDriver extends Configured implements Tool{
 	private String inputPath = "";
@@ -71,23 +76,80 @@ public class AprioriMRDriver extends Configured implements Tool{
 	};
 	@SuppressWarnings({ "unchecked", "rawtypes" })
 	private Class<? extends Reducer>[] reducers = new Class[]{
-		AprioriReducer.class, //compte les frequences au niveau zero
+		AprioriReducer3.class, //compte les frequences dans les autres niveaux
 		AprioriReducer2.class, //genere les nouveaux candidats
-		AprioriReducer3.class //compte les frequences dans les autres niveaux
+		AprioriReducer.class, //compte les frequences au niveau zero
 	};
+	private String[] jobNames = new String[]{
+		"Phase de fouille k=",
+		"Generation de candidats k=", 
+		"Phase initiale k="
+	};
+	/**
+	 * c'est les trois les memes, donc on devrait en utiliser qu'un seul mais on sait jamais...
+	 */
+	private Class[][] jobsIOKeys = new Class[][]{
+			{ArrayWritable.class, ArrayWritable.class},
+			{ArrayWritable.class, ArrayWritable.class},
+			{ArrayWritable.class, ArrayWritable.class} //cles io pour initialisation
+	};
+	private int level = 0;
 	/**
 	 * 
 	 * @param level
 	 * @param jobs
 	 * @throws IOException 
 	 */
-	private void addNewLevel(int level, List<ControlledJob> jobs) throws IOException{
-		JobConf jc = new JobConf("aaaa"+level);
+	private void addNewLevel(int[] level, List<ControlledJob> jobs) throws IOException{
+		this.addCandidateGeneration(level, jobs);
+		this.addMiningPhase(level, jobs);
+	}
+	
+	/**
+	 * 
+	 * @param level
+	 * @param jobs
+	 * @throws IllegalArgumentException
+	 * @throws IOException
+	 */
+	private void addCandidateGeneration(int[] level, List<ControlledJob> jobs) throws IllegalArgumentException, IOException{
+		JobConf jc = new JobConf("aaaa"+level[0]);
 	    ControlledJob j = new ControlledJob(jc);
 	    Job jj = j.getJob();
 	    jj.setJarByClass(AprioriMRDriver.class);
-	    jj.setJobName("AAA"+level);
-		jj.setJobName("Yelp reviews for user count");
+	    jj.setJobName("AAA"+level[0]);
+		jj.setJobName(this.jobNames[1]+level[0]);
+	    j.addDependingJob(jobs.get(jobs.size() - 1));
+	    /**
+	     * il faut gerer les id des mapper/reducer
+	     */
+	    jj.setMapperClass(this.mappers[1]);
+		jj.setReducerClass(this.reducers[1]);
+		//jj.getCounters().addGroup("lol", "lolo");//ajoute un compteur
+		jj.setOutputKeyClass(this.jobsIOKeys[1][0]);//ca va dependre de ce qui est code...
+		jj.setOutputValueClass(this.jobsIOKeys[1][1]);//ca va dependre de ce qui est code
+		
+		FileInputFormat.addInputPath(jj, new Path(this.inputPath+"/k_"+(level[0]-1)));//donc le dossier k_0 contient les fichiers avec les items
+		//au depart ya rien donc il va lire le fichier automatiquement.
+		FileOutputFormat.setOutputPath(jj, new Path(this.outputPath+"/k_"+level[0]));//il va ecrire dans k_1
+		//ensuite le job k_2 va lire dans k_1 donc ya qu'un seul fichier.
+		jobs.add(j);
+	}
+	
+	/**
+	 * 
+	 * @param level
+	 * @param jobs
+	 * @throws IllegalArgumentException
+	 * @throws IOException
+	 */
+	private void addMiningPhase(int[] level, List<ControlledJob> jobs) throws IllegalArgumentException, IOException{
+		JobConf jc = new JobConf("aaaa"+level[0]);
+	    ControlledJob j = new ControlledJob(jc);
+	    Job jj = j.getJob();
+	    jj.setJarByClass(AprioriMRDriver.class);
+	    jj.setJobName("AAA"+level[0]);
+		jj.setJobName(this.jobNames[0]+level[0]);
 	    j.addDependingJob(jobs.get(jobs.size() - 1));
 	    /**
 	     * il faut gerer les id des mapper/reducer
@@ -95,11 +157,43 @@ public class AprioriMRDriver extends Configured implements Tool{
 	    jj.setMapperClass(this.mappers[0]);
 		jj.setReducerClass(this.reducers[0]);
 		//jj.getCounters().addGroup("lol", "lolo");//ajoute un compteur
-		jj.setOutputKeyClass(Text.class);
-		jj.setOutputValueClass(IntWritable.class);
-		FileInputFormat.addInputPath(jj, new Path(this.inputPath+"/k_"+(level-1)));//donc le dossier k_0 contient les fichiers avec les items
+		jj.setOutputKeyClass(this.jobsIOKeys[0][0]);//ca va dependre de ce qui est code...
+		jj.setOutputValueClass(this.jobsIOKeys[0][1]);//ca va dependre de ce qui est code
+		
+		FileInputFormat.addInputPath(jj, new Path(this.inputPath+"/k_"+(level[0]-1)));//donc le dossier k_0 contient les fichiers avec les items
 		//au depart ya rien donc il va lire le fichier automatiquement.
-		FileOutputFormat.setOutputPath(jj, new Path(this.outputPath+"/k_"+level));//il va ecrire dans k_1
+		FileOutputFormat.setOutputPath(jj, new Path(this.outputPath+"/k_"+level[0]));//il va ecrire dans k_1
+		//ensuite le job k_2 va lire dans k_1 donc ya qu'un seul fichier.
+		jobs.add(j);
+	}
+	
+	/**
+	 * 
+	 * @param level
+	 * @param jobs
+	 * @throws IllegalArgumentException
+	 * @throws IOException
+	 */
+	private void addFirstPhase(int[] level, List<ControlledJob> jobs) throws IllegalArgumentException, IOException{
+		JobConf jc = new JobConf("aaaa"+level[0]);
+	    ControlledJob j = new ControlledJob(jc);
+	    Job jj = j.getJob();
+	    jj.setJarByClass(AprioriMRDriver.class);
+	    jj.setJobName("AAA"+level[0]);
+		jj.setJobName(this.jobNames[2]+level[0]);
+	    j.addDependingJob(jobs.get(jobs.size() - 1));
+	    /**
+	     * il faut gerer les id des mapper/reducer
+	     */
+	    jj.setMapperClass(this.mappers[2]);
+		jj.setReducerClass(this.reducers[2]);
+		//jj.getCounters().addGroup("lol", "lolo");//ajoute un compteur
+		jj.setOutputKeyClass(this.jobsIOKeys[2][0]);//ca va dependre de ce qui est code...
+		jj.setOutputValueClass(this.jobsIOKeys[2][1]);//ca va dependre de ce qui est code
+		
+		FileInputFormat.addInputPath(jj, new Path(this.inputPath+"/k_"+(level[0]-1)));//donc le dossier k_0 contient les fichiers avec les items
+		//au depart ya rien donc il va lire le fichier automatiquement.
+		FileOutputFormat.setOutputPath(jj, new Path(this.outputPath+"/k_"+level[0]));//il va ecrire dans k_1
 		//ensuite le job k_2 va lire dans k_1 donc ya qu'un seul fichier.
 		jobs.add(j);
 	}
@@ -117,11 +211,11 @@ public class AprioriMRDriver extends Configured implements Tool{
 		this.outputPath = args[1];
 		
 		//lit un fichier avec les taches minimales ?
-		
+		int[] level = new int[]{0};
 		List<ControlledJob> jobs = new ArrayList<>();
-		for(int i = 1; i < 3; i++) {
-			this.addNewLevel(i, jobs);
-		}
+		this.addFirstPhase(level, jobs);
+		this.addMiningPhase(level, jobs);
+
 		/**
 		 * si on fait un map => recuperer les patterns
 		 * puis reduce qui les compte, 
@@ -133,26 +227,61 @@ public class AprioriMRDriver extends Configured implements Tool{
 	    	jobctrl.addJob(c);
 	    jobctrl.run();
 
-	    if((jobs.get(jobs.size() - 1).getJob().waitForCompletion(true)) ? false : true){
-	    	System.out.print("le job est fini.");
-	    	//comment savoir si il reste des frequents ?
-	    	long nbrOfFrequents = jobs.get(0).getJob().getCounters().findCounter("lol", "lolo").getValue();
-	    	if(nbrOfFrequents>0){
-	    		//rajoute des jobs, 
-	    		this.addNewLevel(jobctrl.getSuccessfulJobList().size(), jobs);
-	    	}
-	    	else{
-	    		//on a fini...
-	    	}
-	    	//si il en reste, alors on relance un nouveau niveau (gencand + mine)
-	    	System.out.println("qsdqsd");
-	    	//sinon, on a fini.
+	    if(this.waitForEnd(level, jobs, jobctrl)){
+	    	//waitForEnd(level, jobs, jobctrl);
+	    	jobctrl.run();
 	    }
 	    
-	    
 		//System.exit(jobs.get(jobs.size() - 1).getJob().waitForCompletion(true) ? 0:1); 
-		boolean success = jobs.get(jobs.size() - 1).getJob().waitForCompletion(true);
-		return success ? 0 : 1;
+		//boolean success = jobs.get(jobs.size() - 1).getJob().waitForCompletion(true);
+		//return success ? 0 : 1;
+	    return 0;
+	}
+	
+	/**
+	 * 
+	 * @param level
+	 * @param jobs
+	 * @param jobctrl
+	 * @return
+	 * @throws ClassNotFoundException
+	 * @throws IOException
+	 * @throws InterruptedException
+	 */
+	private boolean waitForEnd(int[] level, List<ControlledJob> jobs, JobControl jobctrl) throws ClassNotFoundException, IOException, InterruptedException{
+		boolean success = jobs.get(jobs.size() - 1).getJob().waitForCompletion(true) ? false : true;
+	    return success && this.whatDoWeDoNow(level, jobs, jobctrl);
+	}
+	
+	/**
+	 * 
+	 * @param level
+	 * @param jobs
+	 * @param jobctrl
+	 * @return
+	 * @throws IOException
+	 */
+	private boolean whatDoWeDoNow(int[] level, List<ControlledJob> jobs, JobControl jobctrl) throws IOException{
+		System.out.print("le job est fini.");
+    	//comment savoir si il reste des frequents ?
+    	long nbrOfFrequents = jobs.get(0).getJob().getCounters().findCounter(Counters.FREQ).getValue();
+    	System.out.println("nombre de freq:"+nbrOfFrequents);
+    	if(nbrOfFrequents>0){
+    		level[0]++;
+    		//rajoute des jobs, 
+    		//this.addNewLevel(jobctrl.getSuccessfulJobList().size(), jobs);
+    		this.addNewLevel(level, jobs);
+//    		for(int i = 1; i < 3; i++) {
+//    			this.addNewLevel(i, jobs);
+//    		}
+    		return true;
+    	}
+    	else{
+    		//on a fini...
+    		return false;
+    	}
+    	//si il en reste, alors on relance un nouveau niveau (gencand + mine)
+    	//sinon, on a fini.
 	}
 	
 	/**

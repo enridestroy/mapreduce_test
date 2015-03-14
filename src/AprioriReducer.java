@@ -43,7 +43,7 @@ public class AprioriReducer extends Reducer<Text, MRTransaction, ArrayWritable, 
 			ArrayWritable pattern = new ArrayWritable(Text.class, new Text[]{ key });
 			
 			context.write(pattern, ooo);//est ce que ca fait bien ce que je veux ?
-			context.getCounter("lol", "lolo").increment(1);//il faut juste que des qu'on a un item frequent ca soit + que zero	
+			context.getCounter(Counters.FREQ).increment(1);//il faut juste que des qu'on a un item frequent ca soit + que zero	
 		}
 	}
 	
@@ -55,7 +55,7 @@ public class AprioriReducer extends Reducer<Text, MRTransaction, ArrayWritable, 
         Configuration conf = context.getConfiguration();
         Cluster cluster = new Cluster(conf);
         Job currentJob = cluster.getJob(context.getJobID());
-        redCounter = currentJob.getCounters().findCounter("lol", "lolo").getValue();
+        redCounter = currentJob.getCounters().findCounter(Counters.FREQ).getValue();
     }
 
 }
