@@ -2,13 +2,13 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.conf.Configured;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.ArrayWritable;
 import org.apache.hadoop.io.IntWritable;
 import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.Text;
-import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.hadoop.mapreduce.Mapper;
 import org.apache.hadoop.mapreduce.Reducer;
@@ -63,7 +63,14 @@ import org.apache.hadoop.util.ToolRunner;
  * 
  * TODO :
  * ajouter les nouveaux jobs dans le jobcontroller
- * indiquer les noms des fichiers  a charger...
+ * indiquer les noms des fichiers a charger ?
+ * 
+ * specialiser ArrayWritable en TextArrayWritable et MRTransactionArrayWritable
+ * peu pertinent mais necessaire.
+ * apres, ca devrait fonctionner correctement.
+ * 
+ * 
+ * 
  */
 public class AprioriMRDriver extends Configured implements Tool{
 	private String inputPath = "";
@@ -81,19 +88,89 @@ public class AprioriMRDriver extends Configured implements Tool{
 		AprioriReducer.class, //compte les frequences au niveau zero
 	};
 	private String[] jobNames = new String[]{
-		"Phase de fouille k=",
-		"Generation de candidats k=", 
-		"Phase initiale k="
+		"Phase de fouille k=", "Generation de candidats k=",  "Phase initiale k="
 	};
 	/**
 	 * c'est les trois les memes, donc on devrait en utiliser qu'un seul mais on sait jamais...
+	 * en fait, on a besoin que d'un seul truc, pas un tableau
 	 */
 	private Class[][] jobsIOKeys = new Class[][]{
-			{ArrayWritable.class, ArrayWritable.class},
-			{ArrayWritable.class, ArrayWritable.class},
-			{ArrayWritable.class, ArrayWritable.class} //cles io pour initialisation
+		{Text.class, MRTransactionArrayWritable.class},
+		{Text.class, MRTransactionArrayWritable.class},
+		{Text.class, MRTransaction.class} //cles io pour initialisation
 	};
 	private int level = 0;
+	
+	/**
+	 * HADOOP
+	 * 
+	 */
+	
+	/**
+	 * @param args
+	 * @throws Exception
+	 */
+	public static void main(String[] args) throws Exception {
+		AprioriMRDriver driver = new AprioriMRDriver();
+		int exitCode = ToolRunner.run(driver, args);
+		System.exit(exitCode);
+	}
+	
+	/**
+	 * configure les job mapr hadoop
+	 */
+	public int run(String[] args) throws Exception{
+		if(args.length !=2) {
+			System.err.println("Usage: AprioriDriver usage <input path> <outputpath>");
+			System.exit(-1);
+		}
+		this.inputPath = args[0];
+		this.outputPath = args[1];
+		
+		//lit un fichier avec les taches minimales ?
+		int[] level = new int[]{1};
+		List<ControlledJob> jobs = new ArrayList<>();
+		this.addFirstPhase(level, jobs);
+		//this.addMiningPhase(level, jobs);
+
+		/**
+		 * si on fait un map => recuperer les patterns
+		 * puis reduce qui les compte, 
+		 * 
+		 * ensuite on a fini donc on doit generer un nouveau job.
+		 */
+		System.out.println("creqtion du jobc");
+		JobControl jobctrl = new JobControl("controleur de jobs");
+	    for(ControlledJob c : jobs){
+	    	System.out.println("ajout");
+	    	jobctrl.addJob(c);
+	    }
+	    System.out.println("debut");
+//	    for(ControlledJob jjj : jobctrl.getReadyJobsList()){
+//	    	System.out.println(">>>"+jjj.getJobName());
+//    	}
+	    for(ControlledJob jjj : jobctrl.getWaitingJobList()){
+	    	System.out.println("!!!!!"+jjj.getJobName());
+    	}
+	    jobctrl.run();
+
+	    return jobctrl.allFinished() ? 0 : 1;
+	    
+//	    if(this.waitForEnd(level, jobs, jobctrl)){
+//	    	//waitForEnd(level, jobs, jobctrl);
+//	    	jobctrl.run();
+//	    }
+	    
+		//System.exit(jobs.get(jobs.size() - 1).getJob().waitForCompletion(true) ? 0:1); 
+		//boolean success = jobs.get(jobs.size() - 1).getJob().waitForCompletion(true);
+		//return success ? 0 : 1;
+	    //return 0;
+	}
+	
+	/**
+	 * APRIORI
+	 */
+	
 	/**
 	 * 
 	 * @param level
@@ -101,19 +178,19 @@ public class AprioriMRDriver extends Configured implements Tool{
 	 * @throws IOException 
 	 */
 	private void addNewLevel(int[] level, List<ControlledJob> jobs) throws IOException{
-		this.addCandidateGeneration(level, jobs);
-		this.addMiningPhase(level, jobs);
+		this.addCandidateGeneration(level, jobs);//ajoute une job de generation de candidats
+		this.addMiningPhase(level, jobs);//ajoute une phase de fouille
 	}
 	
 	/**
-	 * 
+	 * ajoute une job de generation de candidats
 	 * @param level
 	 * @param jobs
 	 * @throws IllegalArgumentException
 	 * @throws IOException
 	 */
 	private void addCandidateGeneration(int[] level, List<ControlledJob> jobs) throws IllegalArgumentException, IOException{
-		JobConf jc = new JobConf("aaaa"+level[0]);
+		Configuration jc = new Configuration();
 	    ControlledJob j = new ControlledJob(jc);
 	    Job jj = j.getJob();
 	    jj.setJarByClass(AprioriMRDriver.class);
@@ -137,14 +214,14 @@ public class AprioriMRDriver extends Configured implements Tool{
 	}
 	
 	/**
-	 * 
+	 * ajoute une job de phase de fouille
 	 * @param level
 	 * @param jobs
 	 * @throws IllegalArgumentException
 	 * @throws IOException
 	 */
 	private void addMiningPhase(int[] level, List<ControlledJob> jobs) throws IllegalArgumentException, IOException{
-		JobConf jc = new JobConf("aaaa"+level[0]);
+		Configuration jc = new Configuration();
 	    ControlledJob j = new ControlledJob(jc);
 	    Job jj = j.getJob();
 	    jj.setJarByClass(AprioriMRDriver.class);
@@ -168,20 +245,22 @@ public class AprioriMRDriver extends Configured implements Tool{
 	}
 	
 	/**
-	 * 
+	 * ajoute une job de identification des itemsets de taille 1 et comptage de ceux-ci (associe une liste de transactions pour chaque 1-itemset)
 	 * @param level
 	 * @param jobs
 	 * @throws IllegalArgumentException
 	 * @throws IOException
 	 */
 	private void addFirstPhase(int[] level, List<ControlledJob> jobs) throws IllegalArgumentException, IOException{
-		JobConf jc = new JobConf("aaaa"+level[0]);
+		//JobConf jc = new JobConf("aaaa"+level[0]);
+		Configuration jc = new Configuration();
 	    ControlledJob j = new ControlledJob(jc);
-	    Job jj = j.getJob();
+	    @SuppressWarnings("deprecation")
+		Job jj = new Job();
 	    jj.setJarByClass(AprioriMRDriver.class);
 	    jj.setJobName("AAA"+level[0]);
 		jj.setJobName(this.jobNames[2]+level[0]);
-	    j.addDependingJob(jobs.get(jobs.size() - 1));
+	    //j.addDependingJob(jobs.get(jobs.size() - 1));
 	    /**
 	     * il faut gerer les id des mapper/reducer
 	     */
@@ -190,56 +269,17 @@ public class AprioriMRDriver extends Configured implements Tool{
 		//jj.getCounters().addGroup("lol", "lolo");//ajoute un compteur
 		jj.setOutputKeyClass(this.jobsIOKeys[2][0]);//ca va dependre de ce qui est code...
 		jj.setOutputValueClass(this.jobsIOKeys[2][1]);//ca va dependre de ce qui est code
-		
 		FileInputFormat.addInputPath(jj, new Path(this.inputPath+"/k_"+(level[0]-1)));//donc le dossier k_0 contient les fichiers avec les items
 		//au depart ya rien donc il va lire le fichier automatiquement.
 		FileOutputFormat.setOutputPath(jj, new Path(this.outputPath+"/k_"+level[0]));//il va ecrire dans k_1
 		//ensuite le job k_2 va lire dans k_1 donc ya qu'un seul fichier.
+		j.setJob(jj);
 		jobs.add(j);
 	}
 	
-	/**
-	 * 
-	 */
-	public int run(String[] args) throws Exception{
-		if(args.length !=2) {
-			System.err.println("Usage: AprioriDriver usage <input path> <outputpath>");
-			System.exit(-1);
-		}
-		
-		this.inputPath = args[0];
-		this.outputPath = args[1];
-		
-		//lit un fichier avec les taches minimales ?
-		int[] level = new int[]{0};
-		List<ControlledJob> jobs = new ArrayList<>();
-		this.addFirstPhase(level, jobs);
-		this.addMiningPhase(level, jobs);
-
-		/**
-		 * si on fait un map => recuperer les patterns
-		 * puis reduce qui les compte, 
-		 * 
-		 * ensuite on a fini donc on doit generer un nouveau job.
-		 */
-		JobControl jobctrl = new JobControl("controleur de jobs");
-	    for(ControlledJob c : jobs)
-	    	jobctrl.addJob(c);
-	    jobctrl.run();
-
-	    if(this.waitForEnd(level, jobs, jobctrl)){
-	    	//waitForEnd(level, jobs, jobctrl);
-	    	jobctrl.run();
-	    }
-	    
-		//System.exit(jobs.get(jobs.size() - 1).getJob().waitForCompletion(true) ? 0:1); 
-		//boolean success = jobs.get(jobs.size() - 1).getJob().waitForCompletion(true);
-		//return success ? 0 : 1;
-	    return 0;
-	}
 	
 	/**
-	 * 
+	 * verifie si tous les jobs sont finis
 	 * @param level
 	 * @param jobs
 	 * @param jobctrl
@@ -254,7 +294,7 @@ public class AprioriMRDriver extends Configured implements Tool{
 	}
 	
 	/**
-	 * 
+	 * termine ou rajoute un nouveau niveau de fouille
 	 * @param level
 	 * @param jobs
 	 * @param jobctrl
@@ -282,16 +322,5 @@ public class AprioriMRDriver extends Configured implements Tool{
     	}
     	//si il en reste, alors on relance un nouveau niveau (gencand + mine)
     	//sinon, on a fini.
-	}
-	
-	/**
-	 * 
-	 * @param args
-	 * @throws Exception
-	 */
-	public static void main(String[] args) throws Exception {
-		AprioriMRDriver driver = new AprioriMRDriver();
-		int exitCode = ToolRunner.run(driver, args);
-		System.exit(exitCode);
 	}
 }

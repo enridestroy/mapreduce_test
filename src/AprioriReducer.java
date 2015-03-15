@@ -16,7 +16,7 @@ import org.apache.hadoop.mapreduce.Reducer;
  * on va compter les elements envoyes par le mapper sur chaque cle.
  * on va renvoyer une paire cle et liste de transactions (uniquement les frequents)
  */
-public class AprioriReducer extends Reducer<Text, MRTransaction, ArrayWritable, ArrayWritable>{
+public class AprioriReducer extends Reducer<Text, MRTransaction, Text, MRTransactionArrayWritable>{
 	private long redCounter;
 	/**
 	 * 
@@ -38,11 +38,11 @@ public class AprioriReducer extends Reducer<Text, MRTransaction, ArrayWritable, 
 				alltrx[i] = it.next();
 				i++;
 			}
-			ArrayWritable ooo = new ArrayWritable(MRTransaction.class, alltrx);
+			MRTransactionArrayWritable ooo = new MRTransactionArrayWritable(alltrx);
 			//ca devrait etre un ArrayWritable<String> pour la clef
-			ArrayWritable pattern = new ArrayWritable(Text.class, new Text[]{ key });
+			TextArrayWritable pattern = new TextArrayWritable(new Text[]{ key });//MTN on pourrait ajouter key directement...
 			
-			context.write(pattern, ooo);//est ce que ca fait bien ce que je veux ?
+			context.write(pattern.createText(), ooo);//est ce que ca fait bien ce que je veux ?
 			context.getCounter(Counters.FREQ).increment(1);//il faut juste que des qu'on a un item frequent ca soit + que zero	
 		}
 	}

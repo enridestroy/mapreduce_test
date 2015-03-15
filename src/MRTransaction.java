@@ -3,6 +3,8 @@ import java.io.DataOutput;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
 
 import org.apache.hadoop.io.ArrayWritable;
 import org.apache.hadoop.io.Text;
@@ -15,10 +17,13 @@ import org.apache.hadoop.io.Writable;
  */
 public class MRTransaction implements Writable{
 	//
-	private ArrayList<String> items = new ArrayList<>();
+	private TextArrayWritable items;// = new ArrayList<>();
 	
-	public MRTransaction(String[] trx) {
-		this.items = (ArrayList<String>)Arrays.asList(trx);
+	public MRTransaction(Text[] trx) {
+		//this.items = new ArrayList<>();//
+		//System.out.println("MRLISTTTTT");
+		//Collections.addAll(this.items, trx);
+		this.items = new TextArrayWritable(trx);
 	}
 	
 	/**
@@ -27,9 +32,11 @@ public class MRTransaction implements Writable{
 	 * @return
 	 */
 	public boolean contains(String key){
+		Text[] oo = (Text[])items.toArray();
+		List l = Arrays.asList(oo);
 		char[] cc = key.toCharArray();
 		for(Character c : cc){
-			if(!items.contains(c.toString())){
+			if(!l.contains(c.toString())){
 				return false;
 			}
 		}
@@ -42,8 +49,10 @@ public class MRTransaction implements Writable{
 	 * @return
 	 */
 	public boolean contains(ArrayList<String> key){
+		Text[] oo = (Text[])items.toArray();
+		List l = Arrays.asList(oo);
 		for(String s : key){
-			if(!this.items.contains(s)){
+			if(!l.contains(s)){
 				return false;
 			}
 		}
@@ -56,8 +65,10 @@ public class MRTransaction implements Writable{
 	 * @return
 	 */
 	public boolean contains(Text[] key){
+		Text[] oo = (Text[])items.toArray();
+		List l = Arrays.asList(oo);
 		for(Text s : key){
-			if(!this.items.contains(s.toString())){
+			if(!l.contains(s.toString())){
 				return false;
 			}
 		}
@@ -69,11 +80,7 @@ public class MRTransaction implements Writable{
 	 */
 	@Override
 	public void readFields(DataInput arg0) throws IOException {
-		ArrayWritable tt = new ArrayWritable(Text.class);
-		tt.readFields(arg0);
-		for(Text t : (Text[])tt.toArray()){
-			this.items.add(t.toString());
-		}
+		this.items.readFields(arg0);
 	}
 
 	/**
@@ -81,13 +88,14 @@ public class MRTransaction implements Writable{
 	 */
 	@Override
 	public void write(DataOutput arg0) throws IOException {
-		ArrayWritable tt = new ArrayWritable(Text.class);
-		String[] ss = this.items.toArray(new String[this.items.size()]);
-		Text[] casted = new Text[ss.length];
-		for(int i=0;i<ss.length;i++){
-			casted[i] = new Text(ss[i]);
-		}
-		tt.write(arg0);
+		this.items.write(arg0);
+//		TextArrayWritable tt = new TextArrayWritable();
+//		String[] ss = this.items.toArray(new String[this.items.size()]);
+//		Text[] casted = new Text[ss.length];
+//		for(int i=0;i<ss.length;i++){
+//			casted[i] = new Text(ss[i]);
+//		}
+//		tt.write(arg0);
 	}
 
 }

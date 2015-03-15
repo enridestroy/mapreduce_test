@@ -17,16 +17,16 @@ import org.apache.hadoop.mapreduce.Reducer;
  * on va compter les elements envoyes par le mapper sur chaque cle.
  * on va renvoyer une paire cle et liste de transactions (uniquement les frequents)
  */
-public class AprioriReducer3 extends Reducer<ArrayWritable, ArrayWritable, ArrayWritable, ArrayWritable>{
+public class AprioriReducer3 extends Reducer<Text, MRTransactionArrayWritable, Text, MRTransactionArrayWritable>{
 	private long redCounter;
 	
 	/**
 	 * il faut remplacer ici aussi les Text par ArrayWritable
 	 */
-	public void reduce(ArrayWritable key, Iterable<ArrayWritable> values, Context context) throws IOException, InterruptedException {
+	public void reduce(Text key, Iterable<MRTransactionArrayWritable> values, Context context) throws IOException, InterruptedException {
 		int frequence = 0;
 		//on pourrait utiliser Arrays.asList() puis des remove().
-		for (ArrayWritable value : values) {
+		for (MRTransactionArrayWritable value : values) {
 			MRTransaction[] trx = ((MRTransaction[])value.toArray());
 			frequence += trx.length;
 		}
@@ -34,7 +34,7 @@ public class AprioriReducer3 extends Reducer<ArrayWritable, ArrayWritable, Array
 		//si on en a suffisament,
 		if(frequence > th){
 			//normalement ca devrait pas marcher mais vu qu'il n'y a qu un item dans values, ca pose pas de pb...
-			for (ArrayWritable value : values) {
+			for (MRTransactionArrayWritable value : values) {
 				context.write(key, value);//est ce que ca fait bien ce que je veux ?
 			}
 			context.getCounter(Counters.FREQ).increment(1);//il faut juste que des qu'on a un item frequent ca soit + que zero
